@@ -10,7 +10,6 @@
 mod rm67162;
 // mod vial;
 
-use core::cell::RefCell;
 
 // use crate::{
 //     keymap::{COL, NUM_LAYER, ROW},
@@ -18,39 +17,39 @@ use core::cell::RefCell;
 // };
 use defmt::*;
 use defmt_rtt as _;
-use embassy_embedded_hal::shared_bus::blocking::spi::SpiDevice;
+// use embassy_embedded_hal::shared_bus::blocking::spi::SpiDevice;
 use embassy_executor::Spawner;
-use embassy_stm32::peripherals::PB2;
+// use embassy_stm32::peripherals::PB2;
 use embassy_stm32::{
-    bind_interrupts,
-    flash::{Blocking, Flash},
-    gpio::{AnyPin, Input, Level, Output, Speed},
-    ospi::{self, ChipSelectHighTime, FIFOThresholdLevel, MemorySize},
-    peripherals::USB_OTG_HS,
-    spi::{self, Spi},
-    time::{mhz, Hertz},
-    Config,
+    // bind_interrupts,
+    // flash::{Blocking, Flash},
+    // gpio::{AnyPin, Input, Level, Output, Speed},
+    mode::Blocking, ospi::{self, ChipSelectHighTime, FIFOThresholdLevel, MemorySize}
+    // peripherals::USB_OTG_HS,
+    // spi::{self, Spi},
+    // time::{mhz, Hertz},
+    // Config,
 };
-use embassy_stm32::{dma::NoDma, peripherals::DMA1_CH3};
+// use embassy_stm32::{dma::NoDma, peripherals::DMA1_CH3};
 use embassy_stm32::{mode::Async, ospi::Ospi, peripherals::OCTOSPI1};
-use embassy_sync::blocking_mutex::{raw::NoopRawMutex, NoopMutex};
-use embassy_time::Delay;
-use embassy_time::Timer;
-use embedded_graphics::{
-    draw_target::DrawTarget,
-    geometry::Point,
-    image::{Image, ImageRawLE},
-    mono_font::{ascii::FONT_10X20, MonoTextStyle},
-    pixelcolor::Rgb888,
-    pixelcolor::{Rgb565, RgbColor},
-    prelude::*,
-    primitives::Rectangle,
-    primitives::{Line, Primitive as _, PrimitiveStyle},
-    text::Text,
-    Drawable,
-};
+// use embassy_sync::blocking_mutex::{raw::NoopRawMutex, NoopMutex};
+// use embassy_time::Delay;
+// use embassy_time::Timer;
+// use embedded_graphics::{
+//     draw_target::DrawTarget,
+//     geometry::Point,
+//     image::{Image, ImageRawLE},
+//     mono_font::{ascii::FONT_10X20, MonoTextStyle},
+//     pixelcolor::Rgb888,
+//     pixelcolor::{Rgb565, RgbColor},
+//     prelude::*,
+//     primitives::Rectangle,
+//     primitives::{Line, Primitive as _, PrimitiveStyle},
+//     text::Text,
+//     Drawable,
+// };
 use panic_probe as _;
-use static_cell::StaticCell;
+// use static_cell::StaticCell;
 // use rmk::{
 //     config::{RmkConfig, VialConfig},
 //     initialize_keyboard_and_run,
@@ -113,7 +112,7 @@ async fn main(_spawner: Spawner) {
     // clock_mode: MODE0, aka CLK must stay low while nCS is high
     ospi_config.clock_mode = false;
 
-    let mut ospi = Ospi::new_quadspi(
+    let mut ospi: Ospi<OCTOSPI1, Blocking> = Ospi::new_blocking_quadspi(
         p.OCTOSPI1,
         p.PA3,
         p.PC9,
@@ -121,7 +120,7 @@ async fn main(_spawner: Spawner) {
         p.PE2,
         p.PD13,
         p.PB6,
-        p.DMA1_CH3,
+        // p.DMA1,
         ospi_config,
     );
 
