@@ -1,0 +1,102 @@
+{
+    // 使用 IntelliSense 了解相关属性。 
+    // 悬停以查看现有属性的描述。
+    // 欲了解更多信息，请访问: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug",
+            "cwd": "${workspaceFolder}",
+            "executable": "target/thumbv7em-none-eabihf/debug/eg-demo",
+            "loadFiles": [
+                "target/thumbv7em-none-eabihf/debug/eg-demo",
+            ],
+            "symbolFiles": [
+                {
+                    "file": "target/thumbv7em-none-eabihf/debug/eg-demo",
+                },
+            ],
+            "request": "launch",
+            "type": "cortex-debug",
+            "runToEntryPoint": "main",
+            "servertype": "openocd",
+            "showDevDebugOutput": "parsed",
+            "configFiles": [
+                "openocd.cfg"
+            ],
+            "overrideLaunchCommands": [
+                "interpreter-exec console \"monitor reset halt\"",
+                "-enable-pretty-printing"
+            ],
+            "svdFile": "STM32H7B0x.svd",
+            "interface": "swd",
+            "device": "STM32H7B0VBTx",
+            "rtos": "auto",
+            "liveWatch": {
+                "enabled": true,
+                "samplesPerSecond": 4
+            },
+            "rttConfig": {
+                "enabled": true,
+                "address": "auto",
+                "clearSearch": false,
+                "polling_interval": 20,
+                "rtt_start_retry": 2000,
+                "decoders": [
+                    {
+                        "label": "",
+                        "port": 0,
+                        "type": "console"
+                    }
+                ]
+            },
+            // "preLaunchTask": "Flash"
+        },
+        {
+            "name": "Probe-rs - stm32h7",
+            // "preLaunchTask": "build stm32h7 --debug",
+            "type": "probe-rs-debug",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "chip": "STM32H7B0VBTx",
+            "speed": 24000,
+            "runtimeExecutable": "probe-rs",
+            "runtimeArgs": [
+                "dap-server"
+            ],
+            "flashingConfig": {
+                "flashingEnabled": true,
+                // "resetAfterFlashing": true,
+                "haltAfterReset": false,
+            },
+            "coreConfigs": [
+                {
+                    "coreIndex": 0,
+                    "programBinary": "${workspaceFolder}/target/thumbv7em-none-eabihf/debug/eg-demo",
+                    // "chip": "STM32H7B0VBTx",
+                    "svdFile": "${workspaceFolder}/STM32H7B0x.svd",
+                    "rttEnabled": true,
+                    "rttChannelFormats": [
+                        {
+                            "channelNumber": 0,
+                            // Format RTT data as String data
+                            "dataFormat": "String",
+                            // Include host-side timestamps for every line of data transferred from the target RTT output
+                            "showTimestamps": true
+                        },
+                        {
+                            "channelNumber": 1,
+                            // Treat data as raw binary data, and do not format in any way
+                            "dataFormat": "BinaryLE"
+                        }
+                    ],
+                }
+            ],
+            "consoleLogLevel": "Debug", //Error, Warn, Info, Debug, Trace
+            "wireProtocol": "Swd",
+            "env": {
+                "RUST_LOG": "debug"
+            }
+        },
+    ]
+}
