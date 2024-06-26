@@ -35,6 +35,7 @@ embedded-hal = "1.0"
 embassy-embedded-hal = { version = "0.1", path = "/Users/haobogu/Projects/rust/embassy/embassy-embedded-hal"}
 embedded-graphics = "0.8.1"
 embassy-sync = { version = "0.6", path = "/Users/haobogu/Projects/rust/embassy/embassy-sync" }
+tinygif = "0.0.4"
 
 [profile.dev]
 codegen-units = 1      # better optimizations
