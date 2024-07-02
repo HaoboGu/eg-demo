@@ -110,7 +110,6 @@ async fn main(_spawner: Spawner) {
     ospi_config.sample_shifting = false;
     ospi_config.device_size = MemorySize::_8MiB;
     ospi_config.chip_select_high_time = ChipSelectHighTime::_1Cycle;
-    // clock_mode: MODE0, aka CLK must stay low while nCS is high
     ospi_config.clock_mode = false;
 
     let mut ospi = Ospi::new_quadspi(
