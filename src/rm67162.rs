@@ -1,5 +1,7 @@
 //! On-board RM67162 AMOLED screen driver
 
+use embassy_stm32::ospi::*;
+use embassy_stm32::{mode::Blocking, ospi::Ospi, peripherals::OCTOSPI1};
 use embedded_graphics::{
     pixelcolor::{raw::ToBytes, Rgb565},
     prelude::{DrawTarget, OriginDimensions, Size},
@@ -7,8 +9,6 @@ use embedded_graphics::{
     Pixel,
 };
 use embedded_hal::{delay::DelayNs, digital::OutputPin};
-use embassy_stm32::{mode::Async, ospi::Ospi, peripherals::OCTOSPI1};
-use embassy_stm32::ospi::*;
 
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 pub enum Orientation {
@@ -30,16 +30,15 @@ impl Orientation {
 }
 
 pub struct RM67162<'a> {
-    ospi: Ospi<'a, OCTOSPI1, Async>,
+    ospi: Ospi<'a, OCTOSPI1, Blocking>,
     orientation: Orientation,
 }
 
-impl RM67162<'_>
-{
-    pub fn new<'a>(ospi: Ospi<'a, OCTOSPI1, Async>) -> RM67162<'a> {
+impl RM67162<'_> {
+    pub fn new<'a>(ospi: Ospi<'a, OCTOSPI1, Blocking>) -> RM67162<'a> {
         RM67162 {
             ospi,
-            orientation: Orientation::Portrait,
+            orientation: Orientation::LandscapeFlipped,
         }
     }
 
@@ -48,7 +47,11 @@ impl RM67162<'_>
         self.send_cmd(0x36, &[self.orientation.to_madctr()])
     }
 
-    pub fn reset(&self, rst: &mut impl OutputPin, delay: &mut impl DelayNs) -> Result<(), OspiError> {
+    pub fn reset(
+        &self,
+        rst: &mut impl OutputPin,
+        delay: &mut impl DelayNs,
+    ) -> Result<(), OspiError> {
         rst.set_low().unwrap();
         delay.delay_ms(300);
 
@@ -59,35 +62,32 @@ impl RM67162<'_>
 
     /// send 1-1-1 command by default
     fn send_cmd(&mut self, cmd: u32, data: &[u8]) -> Result<(), OspiError> {
-        // TODO: Do we need cs?
-        // self.cs.set_low().unwrap();
-        let mut transfer_config = TransferConfig::default();
-        transfer_config.instruction = Some(0x02);
-        transfer_config.address = Some(0 | (cmd << 8));
-        transfer_config.adsize = AddressSize::_24bit;
-        // NbData: calculated automatically
-        transfer_config.iwidth = OspiWidth::SING;
-        transfer_config.adwidth = OspiWidth::SING;
-        transfer_config.dwidth = OspiWidth::SING;
-        transfer_config.dummy = DummyCycles::_0;
+        let mut transfer_config = TransferConfig {
+            instruction: Some(0x02),
+            iwidth: OspiWidth::SING,
 
-        transfer_config.abwidth = OspiWidth::NONE;
-        transfer_config.ddtr = false;
+            adsize: AddressSize::_24bit,
+            address: Some(0 | (cmd << 8)),
+            adwidth: OspiWidth::SING,
+
+            dwidth: OspiWidth::SING,
+
+            dummy: DummyCycles::_0,
+            ..Default::default()
+        };
 
         if data.len() == 0 {
-            // TODO: Check this cfg when data is empty
-            transfer_config.address = Some(0 | cmd);
+            transfer_config.address = Some(cmd);
             transfer_config.adsize = AddressSize::_16Bit;
-            self.ospi.blocking_write_dma(&[0_u8], transfer_config)?;
+            self.ospi.blocking_write(&[0_u8], transfer_config)?;
         } else {
-            self.ospi.blocking_write_dma(data, transfer_config)?;
+            self.ospi.blocking_write(data, transfer_config)?;
         }
-        // self.cs.set_high().unwrap();
+
         Ok(())
     }
 
     fn send_cmd_114(&mut self, cmd: u32, data: &[u8]) -> Result<(), OspiError> {
-        // self.cs.set_low().unwrap();
         let mut transfer_config = TransferConfig::default();
         transfer_config.instruction = Some(0x32);
         transfer_config.address = Some(0 | (cmd << 8));
@@ -98,64 +98,40 @@ impl RM67162<'_>
         transfer_config.dwidth = OspiWidth::QUAD;
         transfer_config.dummy = DummyCycles::_0;
 
-        transfer_config.abwidth = OspiWidth::NONE;
-        transfer_config.ddtr = false;
         if data.len() == 0 {
-            // TODO: Check this cfg when data is empty
-            transfer_config.address = Some(0 | cmd);
+            transfer_config.address = Some(cmd);
             transfer_config.adsize = AddressSize::_16Bit;
             transfer_config.dwidth = OspiWidth::SING;
-            self.ospi.blocking_write_dma(&[0_u8], transfer_config)?;
+            self.ospi.blocking_write(&[0_u8], transfer_config)?;
         } else {
-            self.ospi.blocking_write_dma(data, transfer_config)?;
+            self.ospi.blocking_write(data, transfer_config)?;
         }
 
-        // self.cs.set_high().unwrap();
         Ok(())
     }
 
-    fn send_data_114(&mut self, data: &[u8]) -> Result<(), OspiError> {
-        // self.cs.set_low().unwrap();
+    fn send_data(&mut self, data: &[u8]) -> Result<(), OspiError> {
         let mut transfer_config = TransferConfig::default();
         transfer_config.instruction = None;
         transfer_config.address = None;
-        // NbData: calculated automatically
-        transfer_config.iwidth = OspiWidth::SING;
-        transfer_config.adwidth = OspiWidth::SING;
+        transfer_config.iwidth = OspiWidth::NONE;
+        transfer_config.adwidth = OspiWidth::NONE;
         transfer_config.dwidth = OspiWidth::QUAD;
         transfer_config.dummy = DummyCycles::_0;
+        self.ospi.blocking_write(data, transfer_config)?;
 
-        transfer_config.abwidth = OspiWidth::NONE;
-        transfer_config.ddtr = false;
-
-        self.ospi.blocking_write_dma(data, transfer_config)?;
-
-        // self.cs.set_high().unwrap();
         Ok(())
     }
 
-
     /// rm67162_ospi_init
     pub fn init(&mut self, delay: &mut impl embedded_hal::delay::DelayNs) -> Result<(), OspiError> {
-        // TODO: Reset pin, do screen reset(twice)
-
-
-        // Init 3 times?
         for _ in 0..3 {
-            self.send_cmd(0xEF, &[0x05])?; // sleep out
-            self.send_cmd(0x05, &[0x15])?; // sleep out
-            
             self.send_cmd(0x11, &[])?; // sleep out
             delay.delay_ms(120);
 
             self.send_cmd(0x3A, &[0x55])?; // 16bit mode
 
             self.send_cmd(0x51, &[0x00])?; // write brightness
-            delay.delay_ms(1);
-
-            // According to sample code, we need to set the following registers
-            self.send_cmd(0x2A, &[0x00, 0x00, 0x00, 0xEF])?;
-            self.send_cmd(0x2B, &[0x00, 0x00, 0x02, 0x17])?;
 
             self.send_cmd(0x29, &[])?; // display on
             delay.delay_ms(120);
@@ -191,10 +167,9 @@ impl RM67162<'_>
     }
 
     pub fn draw_point(&mut self, x: u16, y: u16, color: Rgb565) -> Result<(), OspiError> {
-        // self.cs.set_low().unwrap();
         self.set_address(x, y, x, y)?;
         self.send_cmd_114(0x2C, &color.to_le_bytes()[..])?;
-        // self.cs.set_high().unwrap();
+        self.send_cmd_114(0x3C, &color.to_le_bytes()[..])?;
         Ok(())
     }
 
@@ -207,69 +182,62 @@ impl RM67162<'_>
         mut colors: impl Iterator<Item = Rgb565>,
     ) -> Result<(), OspiError> {
         self.set_address(x, y, x + w - 1, y + h - 1)?;
-        // self.cs.set_low().unwrap();
-        self.send_cmd_114(0x2C, &colors.next().unwrap().to_be_bytes()[..])?;
-        // self.spi
-        //     .write(
-        //         SpiDataMode::Quad,
-        //         Command::Command8(0x32, SpiDataMode::Single),
-        //         Address::Address24(0x2C << 8, SpiDataMode::Single),
-        //         0,
-        //         &colors.next().unwrap().to_be_bytes()[..],
-        //     )
-        //     .unwrap();
 
         for _ in 1..((w as u32) * (h as u32)) {
-
-            self.send_data_114(&colors.next().unwrap().to_be_bytes()[..])?;
-
-            // self.spi
-            //     .write(
-            //         SpiDataMode::Quad,
-            //         Command::None,
-            //         Address::None,
-            //         0,
-            //         &colors.next().unwrap().to_be_bytes()[..],
-            //     )
-            //     .unwrap();
+            self.send_cmd_114(0x2C, &colors.next().unwrap().to_be_bytes()[..])?;
         }
-        // self.cs.set_high().unwrap();
+
         Ok(())
     }
 
-    fn fill_color(&mut self, x: u16, y: u16, w: u16, h: u16, color: Rgb565) -> Result<(), OspiError> {
+    fn fill_color(
+        &mut self,
+        x: u16,
+        y: u16,
+        w: u16,
+        h: u16,
+        color: Rgb565,
+    ) -> Result<(), OspiError> {
         self.set_address(x, y, x + w - 1, y + h - 1)?;
         // self.cs.set_low().unwrap();
-        self.send_cmd_114(0x2C, &color.to_be_bytes()[..])?;
-        // self.spi
-        //     .write(
-        //         SpiDataMode::Quad,
-        //         Command::Command8(0x32, SpiDataMode::Single),
-        //         Address::Address24(0x2C << 8, SpiDataMode::Single),
-        //         0,
-        //         &color.to_be_bytes()[..],
-        //     )
-        //     .unwrap();
+        let mut buffer: [u8; 200 * 200] = [0; 200 * 200];
 
-        for _ in 1..((w as u32) * (h as u32)) {
-            self.send_data_114(&color.to_be_bytes()[..])?;
-            // self.spi
-            //     .write(
-            //         SpiDataMode::Quad,
-            //         Command::None,
-            //         Address::None,
-            //         0,
-            //         &color.to_be_bytes()[..],
-            //     )
-            //     .unwrap();
+        // Convert color rectangle to buffer
+        for i in 0..(w as u32) * (h as u32) {
+            if i >= 200 * 200 - 1 {
+                break;
+            }
+            buffer[i as usize] = color.to_be_bytes()[0];
+            buffer[i as usize + 1] = color.to_be_bytes()[1];
         }
-        // self.cs.set_high().unwrap();
+        self.send_cmd_114(0x2C, &buffer).unwrap();
+
+        Ok(())
+    }
+    pub unsafe fn fill_with_framebuffer(&mut self, raw_framebuffer: &[u8]) -> Result<(), OspiError> {
+        self.set_address(
+            0,
+            0,
+            self.size().width as u16 - 1,
+            self.size().height as u16 - 1,
+        )?;
+
+        self.send_cmd_114(0x2C, raw_framebuffer)?;
+        // let mut first_send = true;
+        // let transaction = TransferConfig {
+        // };
+        // self.ospi.blocking_write(raw_framebuffer, transaction);
+        // for chunk in raw_framebuffer.chunks(536*240) {
+        //     let txbuf = StaticReadBuffer::new(chunk.as_ptr(), chunk.len());
+        //     self.dma_send_colors(txbuf, first_send)?;
+        //     first_send = false;
+        // }
+
         Ok(())
     }
 }
 
-impl OriginDimensions for RM67162<'_>
-{
+impl OriginDimensions for RM67162<'_> {
     fn size(&self) -> Size {
         if matches!(
             self.orientation,
@@ -282,8 +250,7 @@ impl OriginDimensions for RM67162<'_>
     }
 }
 
-impl DrawTarget for RM67162<'_>
-{
+impl DrawTarget for RM67162<'_> {
     type Color = Rgb565;
 
     type Error = OspiError;
