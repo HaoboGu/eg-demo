@@ -84,7 +84,7 @@ impl<I: Instance> FlashMemory<I> {
             dummy: DummyCycles::_0,
             ..Default::default()
         };
-        self.ospi.command(&transaction).unwrap();
+        self.ospi.command(&transaction).await.unwrap();
     }
 
     async fn exec_command(&mut self, cmd: u8) {
@@ -99,7 +99,7 @@ impl<I: Instance> FlashMemory<I> {
             ..Default::default()
         };
         info!("Excuting command: {:x}", transaction.instruction);
-        self.ospi.command(&transaction).unwrap();
+        self.ospi.command(&transaction).await.unwrap();
     }
 
     pub async fn reset_memory(&mut self) {
@@ -195,7 +195,7 @@ impl<I: Instance> FlashMemory<I> {
             ..Default::default()
         };
         self.enable_write().await;
-        self.ospi.command(&transaction).unwrap();
+        self.ospi.command(&transaction).await.unwrap();
         self.wait_write_finish();
     }
 
