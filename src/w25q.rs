@@ -4,21 +4,6 @@ use embassy_stm32::{
     ospi::{AddressSize, DummyCycles, Instance, Ospi, OspiWidth, TransferConfig},
 };
 
-// let mut flash = FlashMemory::new(ospi).await;
-// let flash_id = flash.read_id();
-// info!("FLASH ID: {=[u8]:x}", flash_id);
-// let mut wr_buf = [0u8; 256];
-// for i in 0..256 {
-//     wr_buf[i] = i as u8;
-// }
-// let mut rd_buf = [0u8; 256];
-// flash.erase_sector(MEMORY_ADDR).await;
-// flash.write_memory(MEMORY_ADDR, &wr_buf, true).await;
-// flash.read_memory(MEMORY_ADDR, &mut rd_buf, true);
-// info!("WRITE BUF: {:?}", wr_buf);
-// info!("READ BUF: {:?}", rd_buf);
-// info!("End of Program, proceed to empty endless loop");
-
 const MEMORY_PAGE_SIZE: usize = 256;
 
 const CMD_READ: u8 = 0x03;
@@ -47,7 +32,6 @@ const CMD_READ_CR: u8 = 0x35;
 
 const CMD_WRITE_SR: u8 = 0x01;
 const CMD_WRITE_CR: u8 = 0x31;
-const MEMORY_ADDR: u32 = 0x00000000u32;
 
 /// Implementation of access to flash chip.
 /// Chip commands are hardcoded as it depends on used chip.
@@ -62,15 +46,62 @@ impl<I: Instance> FlashMemory<I> {
 
         memory.reset_memory().await;
         memory.enable_quad();
-
         memory
+    }
+
+    async fn qpi_mode(&mut self) {
+        // Enter qpi mode
+        self.exec_command(0x38).await;
+        
+        // Set read param
+        let transaction = TransferConfig {
+            iwidth: OspiWidth::QUAD,
+            dwidth: OspiWidth::QUAD,
+            instruction: Some(0xC0),
+            ..Default::default()
+        };
+        self.enable_write().await;
+        self.ospi.blocking_write(&[0x30_u8], transaction).unwrap();
+        self.wait_write_finish();
+    }
+
+    pub async fn enable_mm(&mut self) {
+        self.qpi_mode().await;
+
+        let read_config = TransferConfig {
+            iwidth: OspiWidth::QUAD,
+            isize: AddressSize::_8Bit,
+            adwidth: OspiWidth::QUAD,
+            adsize: AddressSize::_24bit,
+            dwidth: OspiWidth::QUAD,
+            instruction: Some(0x0B), // Fast read in QPI mode
+            dummy: DummyCycles::_8,
+            ..Default::default()
+        };
+
+        let write_config = TransferConfig {
+            iwidth: OspiWidth::SING,
+            isize: AddressSize::_8Bit,
+            adwidth: OspiWidth::SING,
+            adsize: AddressSize::_24bit,
+            dwidth: OspiWidth::QUAD,
+            instruction: Some(0x32), // Write config
+            dummy: DummyCycles::_0,
+            ..Default::default()
+        };
+        self.ospi.enable_memory_mapped_mode(read_config, write_config).unwrap();
     }
 
     fn enable_quad(&mut self) {
         let cr = self.read_cr();
-        info!("Read cr: {:x}", cr);
+        // info!("Read cr: {:x}", cr);
         self.write_cr(cr | 0x02);
-        info!("Read cr after writing: {:x}", cr);
+        // info!("Read cr after writing: {:x}", cr);
+    }
+
+    pub fn disable_quad(&mut self) {
+        let cr = self.read_cr();
+        self.write_cr(cr & (!(0x02)));
     }
 
     async fn exec_command_4(&mut self, cmd: u8) {
@@ -98,7 +129,7 @@ impl<I: Instance> FlashMemory<I> {
             dummy: DummyCycles::_0,
             ..Default::default()
         };
-        info!("Excuting command: {:x}", transaction.instruction);
+        // info!("Excuting command: {:x}", transaction.instruction);
         self.ospi.command(&transaction).await.unwrap();
     }
 
@@ -125,7 +156,7 @@ impl<I: Instance> FlashMemory<I> {
             instruction: Some(CMD_READ_ID as u32),
             ..Default::default()
         };
-        info!("Reading id: 0x{:X}", transaction.instruction);
+        // info!("Reading id: 0x{:X}", transaction.instruction);
         self.ospi.blocking_read(&mut buffer, transaction).unwrap();
         buffer
     }
@@ -276,7 +307,7 @@ impl<I: Instance> FlashMemory<I> {
             ..Default::default()
         };
         self.ospi.blocking_read(&mut buffer, transaction).unwrap();
-        info!("Read w25q64 register: 0x{:x}", buffer[0]);
+        // info!("Read w25q64 register: 0x{:x}", buffer[0]);
         buffer[0]
     }
 
