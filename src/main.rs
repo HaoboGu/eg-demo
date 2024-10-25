@@ -10,11 +10,12 @@ use embassy_executor::Spawner;
 use embassy_stm32::{
     gpio::{Level, Output, Speed},
     mode::Blocking,
-    ospi::{self, ChipSelectHighTime, MemorySize},
+    ospi::{self, ChipSelectHighTime, FIFOThresholdLevel, MemorySize, MemoryType, WrapSize},
     time::Hertz,
     Config,
 };
 use embassy_stm32::{mode::Async, ospi::Ospi, peripherals::OCTOSPI1};
+use embassy_time::Timer;
 use embedded_graphics::{
     draw_target::{DrawTarget, DrawTargetExt as _},
     framebuffer::Framebuffer,
@@ -43,6 +44,7 @@ use embedded_graphics::{
 // };
 use panic_probe as _;
 use rm67162::RM67162;
+use w25q::FlashMemory;
 
 // static SPI_BUS: StaticCell<NoopMutex<RefCell<Spi<SPI1, DMA1_CH1, NoDma>>>> = StaticCell::new();
 #[embassy_executor::main]
